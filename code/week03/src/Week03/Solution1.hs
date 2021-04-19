@@ -10,7 +10,7 @@
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
 
-module Week03.Homework1 where
+module Week03.Solution1 where
 
 import           Control.Monad        hiding (fmap)
 import           Data.Aeson           (ToJSON, FromJSON)
@@ -40,30 +40,20 @@ data VestingDatum = VestingDatum
 PlutusTx.unstableMakeIsData ''VestingDatum
 
 {-# INLINABLE mkValidator #-}
--- This should validate if either beneficiary1 has signed the transaction and the current slot is before or at the deadline
--- or if beneficiary2 has signed the transaction and the deadline has passed.
 mkValidator :: VestingDatum -> () -> ScriptContext -> Bool
-mkValidator dat () ctx = 
-    (traceIfFalse "1st beneficiary's signature is missing" checkSig1       &&
-    traceIfFalse "deadline expired"                   checkDeadline                        ) ||
+mkValidator dat () ctx
+    | (beneficiary1 dat `elem` sigs) && (to       (deadline dat) `contains` range) = True
+    | (beneficiary2 dat `elem` sigs) && (from (1 + deadline dat) `contains` range) = True
+    | otherwise                                                                    = False
+  where
+    info :: TxInfo
+    info = scriptContextTxInfo ctx
 
-    (traceIfFalse "2nd beneficiary's signature is missing" checkSig2        &&
-    traceIfFalse "deadline is not expired"                 checkDeadlinePassed)
-    where
-        info :: TxInfo
-        info = scriptContextTxInfo ctx
+    sigs :: [PubKeyHash]
+    sigs = txInfoSignatories info
 
-        checkSig1 :: Bool
-        checkSig1 = beneficiary1 dat `elem` txInfoSignatories info
-
-        checkSig2 :: Bool
-        checkSig2 = beneficiary2 dat `elem` txInfoSignatories info
-
-        checkDeadline :: Bool
-        checkDeadline = to ( deadline dat ) `contains` txInfoValidRange info
-
-        checkDeadlinePassed :: Bool
-        checkDeadlinePassed = from ( deadline dat ) `contains` txInfoValidRange info 
+    range :: SlotRange
+    range = txInfoValidRange info
 
 data Vesting
 instance Scripts.ScriptType Vesting where

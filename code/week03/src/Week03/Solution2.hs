@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module Week03.Homework2 where
+module Week03.Solution2 where
 
 import           Control.Monad        hiding (fmap)
 import           Data.Aeson           (ToJSON, FromJSON)
@@ -32,27 +32,20 @@ import           Playground.Types     (KnownCurrency (..))
 import           Prelude              (Semigroup (..))
 import           Text.Printf          (printf)
 
-
-
 {-# INLINABLE mkValidator #-}
 mkValidator :: PubKeyHash -> Slot -> () -> ScriptContext -> Bool
-mkValidator pkh slot _ ctx = 
-       traceIfFalse "beneficiary's signature missing" checkSig      &&
-       traceIfFalse "deadline not reached"            checkDeadline
-    where
+mkValidator pkh s () ctx =
+    traceIfFalse "beneficiary's signature missing" checkSig      &&
+    traceIfFalse "deadline not reached"            checkDeadline
+  where
+    info :: TxInfo
+    info = scriptContextTxInfo ctx
 
-        txInfo :: TxInfo
-        txInfo = scriptContextTxInfo ctx
+    checkSig :: Bool
+    checkSig = pkh `elem` txInfoSignatories info
 
-        range :: SlotRange
-        range = txInfoValidRange txInfo
-
-        checkDeadline :: Bool
-        checkDeadline = from slot `contains` range
-
-        checkSig :: Bool
-        checkSig = pkh `elem` txInfoSignatories txInfo
-
+    checkDeadline :: Bool
+    checkDeadline = from s `contains` txInfoValidRange info
 
 data Vesting
 instance Scripts.ScriptType Vesting where
@@ -61,7 +54,7 @@ instance Scripts.ScriptType Vesting where
 
 inst :: PubKeyHash -> Scripts.ScriptInstance Vesting
 inst p = Scripts.validator @Vesting
-    ($$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode p )
+    ($$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode p)
     $$(PlutusTx.compile [|| wrap ||])
   where
     wrap = Scripts.wrapValidator @Slot @()
